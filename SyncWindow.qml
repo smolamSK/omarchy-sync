@@ -132,6 +132,16 @@ Item {
     return ""
   }
 
+  onExportSecretsChanged: {
+    if (!exportSecrets) return
+    Qt.callLater(function() {
+      var bottom = secretsBlock.y + secretsBlock.height
+      if (bottom > exportFlick.contentY + exportFlick.height)
+        exportFlick.contentY = Math.min(bottom - exportFlick.height, Math.max(0, exportFlick.contentHeight - exportFlick.height))
+      passOne.forceActiveFocus()
+    })
+  }
+
   function startExport() {
     if (root.exportProblem !== "" || root.busy) return
     var names = root.exportSections.map(function(s) { return s.name })
@@ -352,216 +362,27 @@ Item {
             currentIndex: root.tab === "export" ? 0 : (root.tab === "import" ? 1 : 2)
 
             // ======================================================== EXPORT
-            Flickable {
-              clip: true
-              contentWidth: width
-              contentHeight: exportColumn.implicitHeight
-              boundsBehavior: Flickable.StopAtBounds
-              QQC.ScrollBar.vertical: QQC.ScrollBar {}
+            // The choices scroll; the action row under them never does, so turning on
+            // Secrets (which adds the passphrase fields) can't push it out of sight.
+            ColumnLayout {
+              spacing: Style.spacing.controlGap
 
-              ColumnLayout {
-                id: exportColumn
-                width: parent.width - Style.spacing.md
-                spacing: Style.spacing.controlGap
-
-                PanelSectionHeader { text: "What to export"; foreground: root.foreground }
-
-                GridLayout {
-                  Layout.fillWidth: true
-                  columns: 2
-                  columnSpacing: Style.spacing.controlGap
-                  rowSpacing: Style.spacing.controlGap
-
-                  Repeater {
-                    model: root.exportSections
-                    delegate: Toggle {
-                      required property var modelData
-                      Layout.fillWidth: true
-                      label: root.sectionLabel(modelData.title)
-                      description: root.sectionDetail(modelData.title)
-                      checked: !!root.exportChosen[modelData.name]
-                      foreground: root.foreground
-                      onClicked: root.setKey("exportChosen", modelData.name, !checked)
-                    }
-                  }
-                }
-
-                // Extra packages: all go unless untucked here.
-                RowLayout {
-                  visible: !!root.exportChosen["packages"] && root.allPackages.length > 0
-                  Layout.fillWidth: true
-                  Button {
-                    text: (root.showPackages ? "Hide packages" : "Choose packages") + "  (" + root.keptPackages.length + " of " + root.allPackages.length + ")"
-                    bordered: true
-                    onClicked: root.showPackages = !root.showPackages
-                  }
-                  Item { Layout.fillWidth: true }
-                }
-
-                Flow {
-                  visible: root.showPackages && !!root.exportChosen["packages"]
-                  Layout.fillWidth: true
-                  spacing: Style.spacing.xs
-                  Repeater {
-                    model: root.allPackages
-                    delegate: Button {
-                      required property var modelData
-                      text: modelData
-                      bordered: true
-                      selected: !root.excludedPackages[modelData]
-                      tooltipText: selected ? "Carried; click to leave it out" : "Left out; click to carry it"
-                      onClicked: root.setKey("excludedPackages", modelData, !root.excludedPackages[modelData])
-                    }
-                  }
-                }
+              Flickable {
+                id: exportFlick
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: width
+                contentHeight: exportColumn.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                QQC.ScrollBar.vertical: QQC.ScrollBar {}
 
                 ColumnLayout {
-                  visible: root.exportSecrets
-                  Layout.fillWidth: true
-                  spacing: Style.spacing.xs
-                  PanelSectionHeader { text: "Secrets passphrase (needed again on the other computer)"; foreground: root.foreground }
-                  RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.spacing.controlGap
-                    TextField {
-                      id: passOne
-                      Layout.fillWidth: true
-                      password: true
-                      placeholderText: "Passphrase, 8 characters or more"
-                      foreground: root.foreground
-                      Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                    }
-                    TextField {
-                      id: passTwo
-                      Layout.fillWidth: true
-                      password: true
-                      placeholderText: "Same passphrase again"
-                      foreground: root.foreground
-                      Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                    }
-                  }
-                }
-
-                PanelSectionHeader { text: "Save to"; foreground: root.foreground }
-
-                Dropdown {
-                  Layout.fillWidth: true
-                  showLabel: false
-                  options: root.destinations
-                  value: root.destination
-                  onChanged: function(value) { root.destination = value }
-                }
-
-                TextField {
-                  id: otherPath
-                  visible: root.destination === "other"
-                  Layout.fillWidth: true
-                  placeholderText: "Folder (the file is named for you) or a full file path"
-                  foreground: root.foreground
-                  Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                }
-
-                RowLayout {
-                  Layout.fillWidth: true
-                  spacing: Style.spacing.controlGap
-                  Button {
-                    text: "Export"
-                    bordered: true
-                    active: root.exportProblem === "" && !root.busy
-                    accent: root.accent
-                    onClicked: root.startExport()
-                  }
-                  Text {
-                    Layout.fillWidth: true
-                    textFormat: Text.PlainText
-                    text: root.exportProblem
-                    color: root.foreground
-                    opacity: 0.65
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.bodySmall
-                    elide: Text.ElideRight
-                  }
-                }
-              }
-            }
-
-            // ======================================================== IMPORT
-            Flickable {
-              clip: true
-              contentWidth: width
-              contentHeight: importColumn.implicitHeight
-              boundsBehavior: Flickable.StopAtBounds
-              QQC.ScrollBar.vertical: QQC.ScrollBar {}
-
-              ColumnLayout {
-                id: importColumn
-                width: parent.width - Style.spacing.md
-                spacing: Style.spacing.controlGap
-
-                PanelSectionHeader { text: "Export file"; foreground: root.foreground }
-
-                Dropdown {
-                  Layout.fillWidth: true
-                  showLabel: false
-                  options: root.candidateOptions
-                  value: root.importFile
-                  onChanged: function(value) { root.importFile = value }
-                }
-
-                TextField {
-                  id: importPath
-                  visible: root.importFile === "other"
-                  Layout.fillWidth: true
-                  placeholderText: "Path to omarchy-settings-….tar.gz"
-                  foreground: root.foreground
-                  Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                }
-
-                RowLayout {
-                  Layout.fillWidth: true
-                  spacing: Style.spacing.controlGap
-                  Button {
-                    text: root.service && root.service.inspecting ? "Reading…" : "Read"
-                    bordered: true
-                    active: root.chosenFile() !== "" && !root.busy
-                    onClicked: if (!root.busy) root.service.inspect(root.chosenFile())
-                  }
-                  Button {
-                    visible: !!(root.info && root.info.rclone["default"])
-                    text: "Fetch newest from " + (root.info ? root.info.rclone["default"] : "")
-                    bordered: true
-                    onClicked: if (!root.busy) root.service.run("pull", ["pull", root.info.rclone["default"], "-o", root.info.host.home + "/.local/share/omarchy-sync/downloads"], "")
-                  }
-                  Item { Layout.fillWidth: true }
-                }
-
-                Text {
-                  visible: !!(root.service && root.service.inspectError)
-                  Layout.fillWidth: true
-                  textFormat: Text.PlainText
-                  wrapMode: Text.Wrap
-                  text: root.service ? "✗ " + root.service.inspectError : ""
-                  color: root.urgent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                }
-
-                ColumnLayout {
-                  visible: !!root.inspected
-                  Layout.fillWidth: true
+                  id: exportColumn
+                  width: parent.width - Style.spacing.md
                   spacing: Style.spacing.controlGap
 
-                  Text {
-                    Layout.fillWidth: true
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    text: root.inspected ? root.inspected.describe : ""
-                    color: root.foreground
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.body
-                  }
-
-                  PanelSectionHeader { text: "What to apply here"; foreground: root.foreground }
+                  PanelSectionHeader { text: "What to export"; foreground: root.foreground }
 
                   GridLayout {
                     Layout.fillWidth: true
@@ -570,41 +391,153 @@ Item {
                     rowSpacing: Style.spacing.controlGap
 
                     Repeater {
-                      model: root.importSections
+                      model: root.exportSections
                       delegate: Toggle {
                         required property var modelData
                         Layout.fillWidth: true
                         label: root.sectionLabel(modelData.title)
                         description: root.sectionDetail(modelData.title)
-                        checked: !!root.importChosen[modelData.name]
+                        checked: !!root.exportChosen[modelData.name]
                         foreground: root.foreground
-                        onClicked: {
-                          root.setKey("importChosen", modelData.name, !checked)
-                          root.optionsChanged()
-                        }
-                      }
-                    }
-
-                    Toggle {
-                      visible: root.hardwareChoice
-                      Layout.fillWidth: true
-                      label: "Also copy screens and input"
-                      description: root.inspected ? root.inspected.hardwareFiles.join(", ") + " from " + root.inspected.source.host + "; usually not" : ""
-                      checked: root.includeHardware
-                      foreground: root.foreground
-                      onClicked: {
-                        root.includeHardware = !checked
-                        root.optionsChanged()
+                        onClicked: root.setKey("exportChosen", modelData.name, !checked)
                       }
                     }
                   }
 
-                  TextField {
-                    id: importPass
-                    visible: root.importSecrets
+                  // Extra packages: all go unless untucked here.
+                  RowLayout {
+                    visible: !!root.exportChosen["packages"] && root.allPackages.length > 0
                     Layout.fillWidth: true
-                    password: true
-                    placeholderText: "Passphrase for the secrets"
+                    Button {
+                      text: (root.showPackages ? "Hide packages" : "Choose packages") + "  (" + root.keptPackages.length + " of " + root.allPackages.length + ")"
+                      bordered: true
+                      onClicked: root.showPackages = !root.showPackages
+                    }
+                    Item { Layout.fillWidth: true }
+                  }
+
+                  Flow {
+                    visible: root.showPackages && !!root.exportChosen["packages"]
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.xs
+                    Repeater {
+                      model: root.allPackages
+                      delegate: Button {
+                        required property var modelData
+                        text: modelData
+                        bordered: true
+                        selected: !root.excludedPackages[modelData]
+                        tooltipText: selected ? "Carried; click to leave it out" : "Left out; click to carry it"
+                        onClicked: root.setKey("excludedPackages", modelData, !root.excludedPackages[modelData])
+                      }
+                    }
+                  }
+
+                  ColumnLayout {
+                    id: secretsBlock
+                    visible: root.exportSecrets
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.xs
+                    PanelSectionHeader { text: "Secrets passphrase (needed again on the other computer)"; foreground: root.foreground }
+                    RowLayout {
+                      Layout.fillWidth: true
+                      spacing: Style.spacing.controlGap
+                      TextField {
+                        id: passOne
+                        Layout.fillWidth: true
+                        password: true
+                        placeholderText: "Passphrase, 8 characters or more"
+                        foreground: root.foreground
+                        Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                      }
+                      TextField {
+                        id: passTwo
+                        Layout.fillWidth: true
+                        password: true
+                        placeholderText: "Same passphrase again"
+                        foreground: root.foreground
+                        Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                      }
+                    }
+                  }
+
+                  PanelSectionHeader { text: "Save to"; foreground: root.foreground }
+
+                  Dropdown {
+                    Layout.fillWidth: true
+                    showLabel: false
+                    options: root.destinations
+                    value: root.destination
+                    onChanged: function(value) { root.destination = value }
+                  }
+
+                  TextField {
+                    id: otherPath
+                    visible: root.destination === "other"
+                    Layout.fillWidth: true
+                    placeholderText: "Folder (the file is named for you) or a full file path"
+                    foreground: root.foreground
+                    Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                  }
+                }
+              }
+
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.spacing.controlGap
+                Button {
+                  text: "Export"
+                  bordered: true
+                  active: root.exportProblem === "" && !root.busy
+                  accent: root.accent
+                  onClicked: root.startExport()
+                }
+                Text {
+                  Layout.fillWidth: true
+                  textFormat: Text.PlainText
+                  text: root.exportProblem
+                  color: root.foreground
+                  opacity: 0.65
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  elide: Text.ElideRight
+                }
+              }
+            }
+
+            // ======================================================== IMPORT
+            ColumnLayout {
+              spacing: Style.spacing.controlGap
+
+              Flickable {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: width
+                contentHeight: importColumn.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                QQC.ScrollBar.vertical: QQC.ScrollBar {}
+
+                ColumnLayout {
+                  id: importColumn
+                  width: parent.width - Style.spacing.md
+                  spacing: Style.spacing.controlGap
+
+                  PanelSectionHeader { text: "Export file"; foreground: root.foreground }
+
+                  Dropdown {
+                    Layout.fillWidth: true
+                    showLabel: false
+                    options: root.candidateOptions
+                    value: root.importFile
+                    onChanged: function(value) { root.importFile = value }
+                  }
+
+                  TextField {
+                    id: importPath
+                    visible: root.importFile === "other"
+                    Layout.fillWidth: true
+                    placeholderText: "Path to omarchy-settings-….tar.gz"
                     foreground: root.foreground
                     Keys.onEscapePressed: keyCatcher.forceActiveFocus()
                   }
@@ -613,46 +546,140 @@ Item {
                     Layout.fillWidth: true
                     spacing: Style.spacing.controlGap
                     Button {
-                      text: "Preview changes"
+                      text: root.service && root.service.inspecting ? "Reading…" : "Read"
                       bordered: true
-                      active: !root.busy && !(root.importSecrets && importPass.text === "")
-                      onClicked: if (!(root.importSecrets && importPass.text === "")) root.preview()
+                      active: root.chosenFile() !== "" && !root.busy
+                      onClicked: if (!root.busy) root.service.inspect(root.chosenFile())
                     }
                     Button {
-                      text: root.pendingCount ? "Apply " + root.pendingCount + " changes" : "Apply"
+                      visible: !!(root.info && root.info.rclone["default"])
+                      text: "Fetch newest from " + (root.info ? root.info.rclone["default"] : "")
                       bordered: true
-                      active: !root.busy && root.pendingCount > 0 && root.service.action === "plan"
-                      onClicked: if (active) { root.confirmKind = "import"; confirm.opened = true }
+                      onClicked: if (!root.busy) root.service.run("pull", ["pull", root.info.rclone["default"], "-o", root.info.host.home + "/.local/share/omarchy-sync/downloads"], "")
                     }
+                    Item { Layout.fillWidth: true }
+                  }
+
+                  Text {
+                    visible: !!(root.service && root.service.inspectError)
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    text: root.service ? "✗ " + root.service.inspectError : ""
+                    color: root.urgent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.body
+                  }
+
+                  ColumnLayout {
+                    visible: !!root.inspected
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.controlGap
+
                     Text {
                       Layout.fillWidth: true
                       textFormat: Text.PlainText
-                      text: root.planActions.length && !root.pendingCount && root.service.action === "plan" ? "Nothing to change: this computer already matches." : ""
-                      color: root.foreground
-                      opacity: 0.65
-                      font.family: root.fontFamily
-                      font.pixelSize: Style.font.bodySmall
-                      elide: Text.ElideRight
-                    }
-                  }
-
-                  Repeater {
-                    model: root.planRows
-                    delegate: Text {
-                      required property var modelData
-                      Layout.fillWidth: true
-                      Layout.topMargin: modelData.header ? Style.spacing.xs : 0
-                      textFormat: Text.PlainText
                       wrapMode: Text.Wrap
-                      text: modelData.text
-                      color: modelData.status === "skipped" ? Qt.darker(root.foreground, 1.4) : root.foreground
-                      opacity: modelData.status === "skipped" ? 0.7 : 1
+                      text: root.inspected ? root.inspected.describe : ""
+                      color: root.foreground
                       font.family: root.fontFamily
-                      font.pixelSize: modelData.header ? Style.font.bodySmall : Style.font.body
-                      font.bold: modelData.header
-                      leftPadding: modelData.header ? 0 : Style.spacing.md
+                      font.pixelSize: Style.font.body
+                    }
+
+                    PanelSectionHeader { text: "What to apply here"; foreground: root.foreground }
+
+                    GridLayout {
+                      Layout.fillWidth: true
+                      columns: 2
+                      columnSpacing: Style.spacing.controlGap
+                      rowSpacing: Style.spacing.controlGap
+
+                      Repeater {
+                        model: root.importSections
+                        delegate: Toggle {
+                          required property var modelData
+                          Layout.fillWidth: true
+                          label: root.sectionLabel(modelData.title)
+                          description: root.sectionDetail(modelData.title)
+                          checked: !!root.importChosen[modelData.name]
+                          foreground: root.foreground
+                          onClicked: {
+                            root.setKey("importChosen", modelData.name, !checked)
+                            root.optionsChanged()
+                          }
+                        }
+                      }
+
+                      Toggle {
+                        visible: root.hardwareChoice
+                        Layout.fillWidth: true
+                        label: "Also copy screens and input"
+                        description: root.inspected ? root.inspected.hardwareFiles.join(", ") + " from " + root.inspected.source.host + "; usually not" : ""
+                        checked: root.includeHardware
+                        foreground: root.foreground
+                        onClicked: {
+                          root.includeHardware = !checked
+                          root.optionsChanged()
+                        }
+                      }
+                    }
+
+                    TextField {
+                      id: importPass
+                      visible: root.importSecrets
+                      Layout.fillWidth: true
+                      password: true
+                      placeholderText: "Passphrase for the secrets"
+                      foreground: root.foreground
+                      Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                    }
+
+                    Repeater {
+                      model: root.planRows
+                      delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.topMargin: modelData.header ? Style.spacing.xs : 0
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        text: modelData.text
+                        color: modelData.status === "skipped" ? Qt.darker(root.foreground, 1.4) : root.foreground
+                        opacity: modelData.status === "skipped" ? 0.7 : 1
+                        font.family: root.fontFamily
+                        font.pixelSize: modelData.header ? Style.font.bodySmall : Style.font.body
+                        font.bold: modelData.header
+                        leftPadding: modelData.header ? 0 : Style.spacing.md
+                      }
                     }
                   }
+                }
+              }
+
+              RowLayout {
+                visible: !!root.inspected
+                Layout.fillWidth: true
+                spacing: Style.spacing.controlGap
+                Button {
+                  text: "Preview changes"
+                  bordered: true
+                  active: !root.busy && !(root.importSecrets && importPass.text === "")
+                  onClicked: if (!(root.importSecrets && importPass.text === "")) root.preview()
+                }
+                Button {
+                  text: root.pendingCount ? "Apply " + root.pendingCount + " changes" : "Apply"
+                  bordered: true
+                  active: !root.busy && root.pendingCount > 0 && root.service.action === "plan"
+                  onClicked: if (active) { root.confirmKind = "import"; confirm.opened = true }
+                }
+                Text {
+                  Layout.fillWidth: true
+                  textFormat: Text.PlainText
+                  text: root.planActions.length && !root.pendingCount && root.service.action === "plan" ? "Nothing to change: this computer already matches." : ""
+                  color: root.foreground
+                  opacity: 0.65
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  elide: Text.ElideRight
                 }
               }
             }
