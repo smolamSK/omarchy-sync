@@ -132,15 +132,7 @@ Item {
     return ""
   }
 
-  onExportSecretsChanged: {
-    if (!exportSecrets) return
-    Qt.callLater(function() {
-      var bottom = secretsBlock.y + secretsBlock.height
-      if (bottom > exportFlick.contentY + exportFlick.height)
-        exportFlick.contentY = Math.min(bottom - exportFlick.height, Math.max(0, exportFlick.contentHeight - exportFlick.height))
-      passOne.forceActiveFocus()
-    })
-  }
+  onExportSecretsChanged: if (exportSecrets) Qt.callLater(function() { passOne.forceActiveFocus() })
 
   function startExport() {
     if (root.exportProblem !== "" || root.busy) return
@@ -362,20 +354,21 @@ Item {
             currentIndex: root.tab === "export" ? 0 : (root.tab === "import" ? 1 : 2)
 
             // ======================================================== EXPORT
-            // The choices scroll; the action row under them never does, so turning on
-            // Secrets (which adds the passphrase fields) can't push it out of sight.
+            // Only the section switches and package list scroll. The passphrase, Save to
+            // and Export sit under them and never scroll out of sight.
             ColumnLayout {
               spacing: Style.spacing.controlGap
 
               Flickable {
                 id: exportFlick
+                Layout.minimumHeight: Style.space(120)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 contentWidth: width
                 contentHeight: exportColumn.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
-                QQC.ScrollBar.vertical: QQC.ScrollBar {}
+                QQC.ScrollBar.vertical: QQC.ScrollBar { policy: size < 1.0 ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AsNeeded }
 
                 ColumnLayout {
                   id: exportColumn
@@ -432,54 +425,55 @@ Item {
                       }
                     }
                   }
+                }
+              }
 
-                  ColumnLayout {
-                    id: secretsBlock
-                    visible: root.exportSecrets
-                    Layout.fillWidth: true
-                    spacing: Style.spacing.xs
-                    PanelSectionHeader { text: "Secrets passphrase (needed again on the other computer)"; foreground: root.foreground }
-                    RowLayout {
-                      Layout.fillWidth: true
-                      spacing: Style.spacing.controlGap
-                      TextField {
-                        id: passOne
-                        Layout.fillWidth: true
-                        password: true
-                        placeholderText: "Passphrase, 8 characters or more"
-                        foreground: root.foreground
-                        Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                      }
-                      TextField {
-                        id: passTwo
-                        Layout.fillWidth: true
-                        password: true
-                        placeholderText: "Same passphrase again"
-                        foreground: root.foreground
-                        Keys.onEscapePressed: keyCatcher.forceActiveFocus()
-                      }
-                    }
-                  }
-
-                  PanelSectionHeader { text: "Save to"; foreground: root.foreground }
-
-                  Dropdown {
-                    Layout.fillWidth: true
-                    showLabel: false
-                    options: root.destinations
-                    value: root.destination
-                    onChanged: function(value) { root.destination = value }
-                  }
-
+              // Where and how: always on screen, under the scrolling choices.
+              ColumnLayout {
+                id: secretsBlock
+                visible: root.exportSecrets
+                Layout.fillWidth: true
+                spacing: Style.spacing.xs
+                PanelSectionHeader { text: "Secrets passphrase (needed again on the other computer)"; foreground: root.foreground }
+                RowLayout {
+                  Layout.fillWidth: true
+                  spacing: Style.spacing.controlGap
                   TextField {
-                    id: otherPath
-                    visible: root.destination === "other"
+                    id: passOne
                     Layout.fillWidth: true
-                    placeholderText: "Folder (the file is named for you) or a full file path"
+                    password: true
+                    placeholderText: "Passphrase, 8 characters or more"
+                    foreground: root.foreground
+                    Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+                  }
+                  TextField {
+                    id: passTwo
+                    Layout.fillWidth: true
+                    password: true
+                    placeholderText: "Same passphrase again"
                     foreground: root.foreground
                     Keys.onEscapePressed: keyCatcher.forceActiveFocus()
                   }
                 }
+              }
+
+              PanelSectionHeader { text: "Save to"; foreground: root.foreground }
+
+              Dropdown {
+                Layout.fillWidth: true
+                showLabel: false
+                options: root.destinations
+                value: root.destination
+                onChanged: function(value) { root.destination = value }
+              }
+
+              TextField {
+                id: otherPath
+                visible: root.destination === "other"
+                Layout.fillWidth: true
+                placeholderText: "Folder (the file is named for you) or a full file path"
+                foreground: root.foreground
+                Keys.onEscapePressed: keyCatcher.forceActiveFocus()
               }
 
               RowLayout {
@@ -516,7 +510,7 @@ Item {
                 contentWidth: width
                 contentHeight: importColumn.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
-                QQC.ScrollBar.vertical: QQC.ScrollBar {}
+                QQC.ScrollBar.vertical: QQC.ScrollBar { policy: size < 1.0 ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AsNeeded }
 
                 ColumnLayout {
                   id: importColumn
@@ -757,10 +751,11 @@ Item {
             id: logView
             Layout.fillWidth: true
             Layout.preferredHeight: Style.space(150)
+            visible: count > 0
             clip: true
             model: root.service ? root.service.log : null
             boundsBehavior: Flickable.StopAtBounds
-            QQC.ScrollBar.vertical: QQC.ScrollBar {}
+            QQC.ScrollBar.vertical: QQC.ScrollBar { policy: size < 1.0 ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AsNeeded }
             onCountChanged: Qt.callLater(function() { logView.positionViewAtEnd() })
             delegate: Text {
               required property string line
