@@ -118,10 +118,19 @@ Item {
       for (var i = 0; i < info.sections.length; i++) chosen[info.sections[i].name] = !!info.sections[i]["default"]
       root.exportChosen = chosen
     }
-    if (root.destination === "" && root.destinations.length) root.destination = root.destinations[0].value
-    if (root.importFile === "" && info.candidates.length) root.importFile = info.candidates[0]
     // The default name carries the hostname, known only once info has arrived.
     if (!root.nameEdited) root.resetFileName()
+  }
+
+  // Defaults for the two pickers, set when their lists change: in onInfoChanged the
+  // lists built from info are not recomputed yet. A destination that went away (a USB
+  // key unplugged) falls back to the first one.
+  onDestinationsChanged: {
+    if (!destinations.some(function(d) { return d.value === root.destination }))
+      root.destination = destinations.length ? destinations[0].value : ""
+  }
+  onCandidateOptionsChanged: {
+    if (root.importFile === "" && candidateOptions.length) root.importFile = candidateOptions[0].value
   }
 
   readonly property var destinations: {
