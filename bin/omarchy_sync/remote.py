@@ -1,11 +1,15 @@
 """Optional rclone transport: push an export to a remote you configured, pull the newest back."""
 
+import json
 import re
 from pathlib import Path
 
 from . import common
 
+# The default export name. Renamed exports are found by archive.peek() locally; in the
+# remote folder (ours alone) every .tar.gz counts and `inspect` checks it after download.
 PATTERN = re.compile(r"^omarchy-settings-.*\.tar\.gz$")
+REMOTE_NAME = re.compile(r"^[^/]+\.tar\.gz$")
 
 
 def config() -> dict:
@@ -65,14 +69,19 @@ def push(file: Path, remote: str = "") -> str:
 
 
 def listing(remote: str = "") -> list:
-    """Export files on the remote, newest first (the names carry the date)."""
+    """Export files (*.tar.gz) in the remote folder, newest first."""
     ensure_rclone()
     remote = _remote(remote)
-    r = common.run(["rclone", "lsf", "--files-only", "--", remote])
+    r = common.run(["rclone", "lsjson", "--files-only", "--", remote])
     if r.returncode != 0:
         raise RuntimeError(f"cannot list {remote}: {(r.stderr or '').strip()[:200]}")
-    names = [n for n in r.stdout.splitlines() if PATTERN.match(n)]
-    return sorted(names, key=lambda n: n[-20:], reverse=True)
+    try:
+        entries = json.loads(r.stdout or "[]")
+    except ValueError:
+        entries = []
+    entries = [e for e in entries if isinstance(e, dict) and REMOTE_NAME.match(str(e.get("Name", "")))]
+    entries.sort(key=lambda e: str(e.get("ModTime", "")), reverse=True)
+    return [e["Name"] for e in entries]
 
 
 def pull(dest: Path, remote: str = "", name: str = "") -> Path:
@@ -80,9 +89,9 @@ def pull(dest: Path, remote: str = "", name: str = "") -> Path:
     if not name:
         found = listing(remote)
         if not found:
-            raise RuntimeError(f"no omarchy-settings-*.tar.gz in {remote}")
+            raise RuntimeError(f"no exports (*.tar.gz) in {remote}")
         name = found[0]
-    if "/" in name or not PATTERN.match(name):
+    if not REMOTE_NAME.match(name):
         raise RuntimeError(f"unexpected file name {name!r}")
     dest.mkdir(parents=True, exist_ok=True)
     src = remote.rstrip("/") + ("/" if not remote.endswith(":") else "") + name

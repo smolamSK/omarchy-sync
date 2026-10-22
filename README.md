@@ -33,9 +33,11 @@ Only files that differ from what Omarchy installed (`/etc/skel`) are exported, s
 
 The launcher and the menu rows open the **Omarchy Sync window**, a native Omarchy overlay with three tabs:
 
-- **Export**: section switches, *Choose packages* to leave some out, two passphrase fields when Secrets is on, and *Save to* (USB drives, Downloads, your rclone remote, or a path you type). Press **Export**.
+- **Export**: section switches, *Choose packages* to leave some out, two passphrase fields when Secrets is on, *Save to* (USB drives, Downloads, your rclone remote, or a path you type) and *File name*. Press **Export**.
 - **Import**: pick an export file (USB drives, Downloads and earlier downloads are listed, or type a path; *Fetch newest from <remote>* downloads one with rclone). **Read** shows where it comes from and what it holds. Choose sections, type the passphrase if it has secrets, then **Preview changes** shows the plan and **Apply** carries it out after you confirm.
 - **Undo**: the imports you can undo, newest first, and **Undo the last import**.
+
+While it runs, a progress bar shows the step it's on (section by section on export, change by change on import). When it's done, a card says how it went: for an export the file name, folder, size and upload, with **Open folder** and **Copy path**; for an import how many changes were applied, skipped or failed, with **Undo this import**. *Show details* opens the full log. If the window is closed by then, a notification tells you instead. An import ends by restarting the Omarchy shell to load the new settings, and the notification arrives once the shell is back.
 
 The bottom of the window shows the progress and log. Escape closes the window but not a running export or import: it carries on, and reopening shows where it is. When package installs need your password, Omarchy's own password prompt (polkit) asks for it, since there is no terminal.
 
@@ -44,6 +46,10 @@ The bottom of the window shows the progress and log. Escape closes the window bu
 - **Export**: tick the sections, untick packages you don't want carried, type a passphrase if you include secrets, then pick a USB drive, Downloads, an rclone remote or another folder.
 - **Import**: pick an export (USB drives, Downloads and the rclone remote are searched), tick the sections, review the plan (`+` new, `~` changed, `–` skipped and why), confirm.
 - **Undo Last Import** puts back every file the last import replaced or created.
+
+### The export file
+
+By default it's called `omarchy-settings-<hostname>-<YYYYmmdd-HHMM>.tar.gz`: the computer's name, then the local date and time to the minute, for example `omarchy-settings-bublinka-20261022-2121.tar.gz`. Change it in the window's *File name* field (*Reset* brings the default back), or with `omarchy-sync export -o ~/somewhere/any-name.tar.gz`. A renamed export is still found by Import, because the plugin recognises its own files by what's inside. In the rclone folder every `.tar.gz` counts.
 
 ### Command line
 

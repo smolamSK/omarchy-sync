@@ -21,6 +21,9 @@ Omarchy Sync carries your Omarchy setup to another Omarchy computer, aarch64 or 
   omarchy-sync menu install|remove    Omarchy menu rows under Setup → Sync Settings
   omarchy-sync sections               the section names for --sections
 
+Exports are named omarchy-settings-<hostname>-<YYYYmmdd-HHMM>.tar.gz unless -o names
+the file. Any name works: renamed exports are still recognised by their contents.
+
 For the GUI (and scripts): `info --json`, `inspect FILE --json`, `import FILE --plan-json`,
 `--passphrase-stdin`, `export --packages a,b`, and `--events` before the command for
 JSON-lines progress on stdout.
@@ -65,13 +68,16 @@ def cmd_export(args) -> int:
         options["packages"] = [p for p in args.packages.split(",") if p]
     if "secrets" in chosen:
         options["passphrase"] = _passphrase(args, confirm=True)
-    out = Path(args.output).expanduser() if args.output else (
-        common.data_dir() / "exports" if args.push is not None else Path.cwd())
-    if args.push is not None or not args.output:
+    if args.output:
+        # An existing folder (or one written with a trailing /) gets the default name;
+        # any other path is the file itself, and its folder is created when written.
+        out = Path(args.output).expanduser()
+        if args.output.endswith("/"):
+            out.mkdir(parents=True, exist_ok=True)
+    else:
+        out = common.data_dir() / "exports" if args.push is not None else Path.cwd()
         out.mkdir(parents=True, exist_ok=True)
-    target = engine.export(out, chosen, options)
-    if args.push is not None:
-        remote.push(target, args.push)
+    engine.export(out, chosen, options, push=args.push)
     return 0
 
 
@@ -124,6 +130,7 @@ def cmd_info() -> int:
         "host": common.machine_info(),
         "sections": [{"name": s.name, "title": s.title, "default": s.default}
                      for name in sections.EXPORT_ORDER for s in sections.SECTIONS if s.name == name],
+        "dataDir": str(common.data_dir()),
         "places": [{"label": f"USB / drive: {d}", "path": str(d)} for d in wizard.removable()]
                   + [{"label": f"Downloads ({common.rel(common.home() / 'Downloads')})",
                       "path": str(common.home() / "Downloads")}],
@@ -206,6 +213,7 @@ def main(argv=None) -> int:
 
     sub.add_parser("sections")
     sub.add_parser("service-start")
+    sub.add_parser("notify-last")
     inf = sub.add_parser("info")
     inf.add_argument("--json", action="store_true", required=True)
     ins = sub.add_parser("inspect")
@@ -241,6 +249,9 @@ def main(argv=None) -> int:
             return 0
         if args.cmd == "service-start":
             menu.service_start()
+            return 0
+        if args.cmd == "notify-last":
+            engine.notify_last()
             return 0
         if args.cmd == "info":
             return cmd_info()

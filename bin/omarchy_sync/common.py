@@ -4,6 +4,7 @@ import filecmp
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -45,7 +46,11 @@ def restart_shell() -> None:
     if not gui():
         run(["omarchy-restart-shell"])
         return
-    subprocess.Popen(["sh", "-c", "sleep 4; exec omarchy-restart-shell"], start_new_session=True,
+    # The shell owns the notification daemon too, so the result is announced by
+    # `notify-last` once the new shell is up.
+    script = shlex.quote(str(Path(__file__).resolve().parent.parent / "omarchy-sync"))
+    subprocess.Popen(["sh", "-c", f"sleep 4; omarchy-restart-shell; exec {script} notify-last"],
+                     start_new_session=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 

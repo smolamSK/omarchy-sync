@@ -41,6 +41,14 @@ Item {
   property var plan: []
   property var result: null
   property string pulled: ""
+  // Progress of the run: done of total steps (total 0 = unknown, the bar just moves).
+  property int progressDone: 0
+  property int progressTotal: 0
+  property string progressLabel: ""
+  // Set by the window: a run that ends while it's closed is announced by notification.
+  property bool windowOpen: false
+  // The window's result card was dismissed.
+  property bool resultSeen: false
   readonly property alias log: logModel
 
   property string pendingSecret: ""
@@ -77,6 +85,10 @@ Item {
     root.step = ""
     root.error = ""
     root.result = null
+    root.resultSeen = false
+    root.progressDone = 0
+    root.progressTotal = 0
+    root.progressLabel = ""
     root.lastLine = ""
     if (kind === "plan" || kind === "import") root.plan = kind === "plan" ? [] : root.plan
     if (kind === "pull") root.pulled = ""
@@ -113,6 +125,10 @@ Item {
       root.addLog((marks[ev.status] || " ") + " " + ev.section + ": " + ev.text, ev.status)
     } else if (ev.event === "running") {
       root.step = ev.section + ": " + ev.text
+    } else if (ev.event === "progress") {
+      root.progressDone = ev.done || 0
+      root.progressTotal = ev.total || 0
+      root.progressLabel = ev.label || ""
     } else if (ev.event === "plan") {
       root.plan = ev.actions || []
     } else if (ev.event === "done") {
@@ -153,6 +169,11 @@ Item {
       root.busy = false
       root.step = ""
       runner.stdinEnabled = true
+      // Closed window: say it's done. After an import or undo from here the shell restarts,
+      // and the detached restart announces the result itself once the new shell is up.
+      var announced = root.action === "export" || root.action === "import" || root.action === "undo"
+      if (announced && !root.windowOpen && root.result && !root.result.restarting)
+        Quickshell.execDetached([root.script, "notify-last"])
       root.finished(root.action, code)
       root.refreshInfo()
     }

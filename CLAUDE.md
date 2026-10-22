@@ -27,12 +27,15 @@ An Omarchy shell plugin (`io.github.smolamsk.sync`) that exports a user's Omarch
 - Runs are `omarchy-sync --events …`. Each event is a stdout line holding a JSON object with an `event` key:
   - `step` comes from `Report.add`.
   - `running` is emitted before each action.
+  - `progress` (`done`, `total`, `label`): on export one per section, plus packing and upload; on import one per pending action. Plan, pull and undo send none, so the bar sweeps.
   - `plan` comes from `import --plan-json`, or from any import before it applies.
-  - `done` carries `file` (export), `backup` (import) or `undone`, plus `counts`.
+  - `done` (`engine.finish`, also saved to `~/.local/state/omarchy-sync/last-run.json`) carries `action`, `ok`, `counts`, up to 10 `failures`, and `file`/`size`/`remote` (export), `backup`/`restarting` (import) or `undone`. The window's result card reads it, or `info.lastRun` after a shell restart.
   - `error` comes from the CLI's exception handler.
   - Every other line is log text. Never print a line starting with `{"event"` that isn't an event.
 - The runner finishes 250 ms after `exited` (the `settle` timer) so trailing output is parsed. The passphrase is written to stdin in `onStarted` (`--passphrase-stdin`), then stdin is closed so no child command waits on it.
 - `OMARCHY_SYNC_GUI=1` (set by the runner) means no terminal: `packages._argv` uses `pkexec pacman` / `yay --sudo pkexec` (Omarchy's polkit agent prompts), and `SettingsSection._default` drops `--install` so `omarchy-default-*` opens its own terminal for a missing app.
+- Notifications: `omarchy-sync notify-last` turns last-run.json into one (`engine.result_text`). The service runs it when a run ends while the window is closed (`windowOpen`). After an import or undo from the GUI, the detached `restart_shell` runs it once the new shell, which owns the notification daemon, is up.
+- File names: the default is `engine.default_name()`; the GUI sends `-o <dir>/<name>.tar.gz` (`info.dataDir`/exports for rclone). `archive.write` puts `manifest.json` first, so `archive.peek()` can recognise renamed exports from the file's head (`wizard.candidates`). Older exports only match by the default-name `remote.PATTERN`. The rclone folder lists every `*.tar.gz` (`remote.REMOTE_NAME`), newest by ModTime.
 - Menu rows run `omarchy-shell shell summon io.github.smolamsk.sync '{"tab":"…"}'`, and the launcher runs `… toggle …`. `service_start` refreshes our menu block when `entries()` changes, but only if the block is already there.
 - QML lint: `qmllint -I <dir with qs → /usr/share/omarchy/shell> -I /usr/lib/qt6/qml SyncWindow.qml Service.qml`. Warnings like "not found on type QObject" (Style.spacing/font) and the QVariantMap → QVariantHash `environment` warning are expected.
 

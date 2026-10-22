@@ -134,8 +134,7 @@ def export_flow() -> int:
         where.mkdir(parents=True, exist_ok=True)
     if kind == "remote":
         where = where or pick_remote()
-        target = engine.export(common.data_dir() / "exports", chosen, options)
-        remote.push(target, where)
+        engine.export(common.data_dir() / "exports", chosen, options, push=where)
     else:
         target = engine.export(Path(where), chosen, options)
         if str(target).startswith(("/run/media", "/media")):
@@ -160,10 +159,14 @@ def pick_remote() -> str:
 # --------------------------------------------------------------------------- import
 
 def candidates() -> list:
+    """Exports on USB drives, in Downloads and in our own folders: by their default name,
+    or (renamed) by the manifest at the head of the file."""
     found = []
     for d in removable() + [common.home() / "Downloads", common.data_dir() / "exports", common.data_dir() / "downloads"]:
-        for depth in ("*", "*/*"):
-            found += [p for p in d.glob(depth) if remote.PATTERN.match(p.name) and p.is_file()]
+        for depth in ("*.tar.gz", "*/*.tar.gz"):
+            for p in d.glob(depth):
+                if p.is_file() and (remote.PATTERN.match(p.name) or archive.peek(p)):
+                    found.append(p)
     return sorted(set(found), key=lambda p: p.stat().st_mtime, reverse=True)
 
 

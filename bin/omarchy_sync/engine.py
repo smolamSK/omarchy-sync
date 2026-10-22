@@ -1,11 +1,12 @@
 """Export, import (plan → backup → apply → report) and undo."""
 
+import json
 import os
 import shutil
 import time
 from pathlib import Path
 
-from . import archive, common, sections
+from . import archive, common, remote, sections
 from .model import Backup, Ctx, undo as undo_backup
 
 VERSION = "1.0.0"
@@ -15,6 +16,12 @@ def finish(action: str, **fields) -> None:
     """The `done` event, also kept in last-run.json so the window can show it after a
     shell restart (which an import ends with) has reloaded it."""
     record = {"action": action, "time": time.strftime("%Y-%m-%d %H:%M"), **fields}
+    report = record.pop("report", None)
+    if report is not None:
+        record["ok"] = not report.failed
+        record["counts"] = report.counts()
+        # The card in the window lists what went wrong (names and reasons, no contents).
+        record["failures"] = [{"section": s, "text": t} for s, st, t in report.rows if st == "failed"][:10]
     common.emit("done", **record)
     try:
         common.write_json(common.state_dir() / "last-run.json", record)
@@ -22,13 +29,49 @@ def finish(action: str, **fields) -> None:
         pass
 
 
+def result_text(record: dict) -> tuple:
+    """(title, detail) of a finished run, for notifications."""
+    counts = record.get("counts", {}) or {}
+    failed = counts.get("failed", 0)
+    trouble = f" with {failed} problem{'s' if failed != 1 else ''}" if failed else ""
+    action = record.get("action")
+    if action == "export":
+        path = Path(record.get("file", ""))
+        detail = f"{path.name} in {common.rel(path.parent)}"
+        if record.get("remote"):
+            detail += f", uploaded to {record['remote']}"
+        return ("Export saved" if not failed else "Export finished" + trouble), detail
+    if action == "import":
+        detail = f"{counts.get('ok', 0)} changes applied, {counts.get('skipped', 0)} skipped"
+        if record.get("backup"):
+            detail += ". Undo is in Setup → Sync Settings"
+        return "Import finished" + trouble, detail
+    if action == "undo":
+        return "Undo finished" + trouble, f"{counts.get('ok', 0)} files put back"
+    return "Omarchy Sync finished", ""
+
+
+def notify_last() -> None:
+    """Announce the last run (used after a shell restart, and when the window is closed)."""
+    record = common.read_json(common.state_dir() / "last-run.json")
+    if not isinstance(record, dict):
+        return
+    title, detail = result_text(record)
+    failed = (record.get("counts", {}) or {}).get("failed", 0)
+    tab = "undo" if record.get("action") == "import" and record.get("backup") else record.get("action", "export")
+    common.run(["omarchy-notification-send", "-g", chr(0xF04E6), "--app-name", "Omarchy Sync",
+                "-u", "normal" if failed else "low", title, detail,
+                "--exec", "omarchy-shell", "shell", "summon", common.PLUGIN_ID, json.dumps({"tab": tab})])
+
+
 def default_name(info: dict) -> str:
     host = "".join(c if c.isalnum() or c in "-_" else "-" for c in info.get("host", "omarchy"))
     return f"omarchy-settings-{host}-{time.strftime('%Y%m%d-%H%M')}.tar.gz"
 
 
-def export(target: Path, chosen: list, options: dict) -> Path:
-    """Write the export file. target may be a folder (the file is named for you)."""
+def export(target: Path, chosen: list, options: dict, push=None) -> Path:
+    """Write the export file. target may be a folder (the file is named for you).
+    push: an rclone remote to upload it to afterwards ("" = the configured one)."""
     os.umask(0o077)
     here = common.machine_info()
     if target.is_dir():
@@ -36,11 +79,12 @@ def export(target: Path, chosen: list, options: dict) -> Path:
     stage = archive.staging("omarchy-sync-export-")
     report = common.Report()
     ctx = Ctx(stage=stage, report=report, here=here, options=options)
+    steps = [n for n in sections.EXPORT_ORDER if n in chosen]
+    total = len(steps) + 1 + (push is not None)
     try:
         done = []
-        for name in sections.EXPORT_ORDER:
-            if name not in chosen:
-                continue
+        for name in steps:
+            common.emit("progress", done=len(done), total=total, label=sections.BY_NAME[name].title)
             (stage / name).mkdir(exist_ok=True)
             try:
                 sections.BY_NAME[name].collect(ctx)
@@ -59,14 +103,22 @@ def export(target: Path, chosen: list, options: dict) -> Path:
         }
         manifest["checksums"] = archive.checksums(stage)
         common.write_json(stage / archive.MANIFEST, manifest)
+        common.emit("progress", done=len(steps), total=total, label="packing " + target.name)
         archive.write(stage, target)
         os.chmod(target, 0o600)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+    uploaded = ""
+    if push is not None:
+        common.emit("progress", done=len(steps) + 1, total=total, label="uploading with rclone")
+        try:
+            uploaded = remote.push(target, push)
+        except RuntimeError as e:
+            report.fail("upload", str(e))
     report.print("Exported")
     size = target.stat().st_size
     common.say(f"\n{target}  ({size / (1 << 20):.1f} MB)")
-    finish("export", ok=not report.failed, file=str(target), size=size, counts=report.counts())
+    finish("export", report=report, file=str(target), size=size, remote=uploaded)
     return target
 
 
@@ -170,6 +222,8 @@ class Import:
         common.write_json(root / "about.json", {"source": str(self.source), "from": self.ctx.source,
                                                 "manifest": {k: v for k, v in self.manifest.items() if k != "checksums"}})
         report = self.ctx.report
+        todo = sum(1 for a in actions if a.pending)
+        step = 0
         for late in (False, True):
             for a in actions:
                 if a.late != late:
@@ -179,6 +233,8 @@ class Import:
                         report.skip(a.section, a.text)
                     continue
                 common.emit("running", section=a.section, text=a.text)
+                common.emit("progress", done=step, total=todo, label=f"{a.section}: {a.text}")
+                step += 1
                 try:
                     a.fn()
                     report.ok(a.section, a.text)
@@ -189,8 +245,8 @@ class Import:
             common.say(f"\nReplaced files are saved in {common.rel(root)}; `omarchy-sync undo` puts them back.")
         else:
             shutil.rmtree(root, ignore_errors=True)
-        finish("import", ok=not report.failed, backup=str(root) if self.ctx.backup.entries else "",
-               counts=report.counts())
+        finish("import", report=report, backup=str(root) if self.ctx.backup.entries else "",
+               restarting=common.gui() and todo > 0)
         return root
 
 
@@ -242,7 +298,7 @@ def undo(which: str = "") -> bool:
     common.run(["hyprctl", "reload"])
     done = root.with_name(root.name + ".undone")
     os.replace(root, done)
-    finish("undo", ok=not report.failed, undone=root.name, counts=report.counts())
+    finish("undo", report=report, undone=root.name, restarting=common.gui())
     common.restart_shell()
     common.say("\nPackages, plugins and themes the import installed stay; remove them with "
                "`omarchy pkg drop`, `omarchy plugin remove` or the theme menu if you don't want them.")

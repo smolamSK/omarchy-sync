@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import json
 import os
 import subprocess
 import tarfile
@@ -46,11 +47,30 @@ def write(stage: Path, target: Path) -> None:
     tmp = target.with_name("." + target.name + ".part")
     try:
         with tarfile.open(tmp, "w:gz", compresslevel=6) as tar:
-            for p in sorted(stage.iterdir()):
+            # The manifest goes first, so peek() can recognise an export by reading its head.
+            for p in sorted(stage.iterdir(), key=lambda p: (p.name != MANIFEST, p.name)):
                 tar.add(p, arcname=p.name)
         os.replace(tmp, target)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def peek(path: Path):
+    """The manifest of an Omarchy Sync export, read from the head of the file only (without
+    checksums), or None. Finds exports whatever they are named; exports from before the
+    manifest went first are only recognised by their default name."""
+    try:
+        with tarfile.open(path, "r|gz") as tar:
+            first = tar.next()
+            if first is None or first.name != MANIFEST or not first.isfile() or first.size > (1 << 20):
+                return None
+            manifest = json.loads(tar.extractfile(first).read())
+    except (tarfile.TarError, OSError, EOFError, ValueError, AttributeError):
+        return None
+    if not isinstance(manifest, dict) or manifest.get("kind") != "omarchy-sync":
+        return None
+    manifest.pop("checksums", None)
+    return manifest
 
 
 def extract(source: Path, dest: Path) -> dict:
