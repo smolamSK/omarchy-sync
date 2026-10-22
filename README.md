@@ -2,6 +2,8 @@
 
 Carry your Omarchy setup to another Omarchy computer. **Export** writes everything you changed into one file; put it on a USB key, in Downloads or (with rclone) on Google Drive. **Import** on the other computer shows what would change, backs up every file it replaces, and applies the rest. It works between aarch64 and x86_64: packages are checked one by one against the new computer's repositories, and anything that isn't available for that CPU is listed, not forced.
 
+![The Omarchy Sync window on the Export tab, after an export uploaded to Google Drive](preview.png)
+
 ## Install
 
 ```sh
