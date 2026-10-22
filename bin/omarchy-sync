@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# Omarchy Sync: export your Omarchy settings to one file and apply them on another
+# Omarchy install, aarch64 or x86_64. Everything lives in bin/omarchy_sync (Python
+# standard library); this wrapper only starts it in isolated mode, so nothing in
+# the current folder or the environment can change which code runs.
+#
+#   omarchy-sync            the wizard
+#   omarchy-sync help       all commands
+
+set -euo pipefail
+umask 077
+
+here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+exec python3 -I -B -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from omarchy_sync.cli import main; sys.exit(main())' "$here" "$@"
