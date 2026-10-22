@@ -108,17 +108,18 @@ def export(target: Path, chosen: list, options: dict, push=None) -> Path:
         os.chmod(target, 0o600)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
-    uploaded = ""
+    uploaded, fix = "", ""
     if push is not None:
         common.emit("progress", done=len(steps) + 1, total=total, label="uploading with rclone")
         try:
             uploaded = remote.push(target, push)
         except RuntimeError as e:
-            report.fail("upload", str(e))
+            report.fail("upload", f"{e}. The file is saved here: {target}")
+            fix = getattr(e, "fix", "")
     report.print("Exported")
     size = target.stat().st_size
     common.say(f"\n{target}  ({size / (1 << 20):.1f} MB)")
-    finish("export", report=report, file=str(target), size=size, remote=uploaded)
+    finish("export", report=report, file=str(target), size=size, remote=uploaded, fix=fix)
     return target
 
 

@@ -12,6 +12,37 @@ PATTERN = re.compile(r"^omarchy-settings-.*\.tar\.gz$")
 REMOTE_NAME = re.compile(r"^[^/]+\.tar\.gz$")
 
 
+class RemoteError(RuntimeError):
+    """An rclone failure in words, with the command that fixes it when there is one."""
+
+    def __init__(self, message: str, fix: str = ""):
+        super().__init__(message + (f"; fix it with `{fix}`" if fix else ""))
+        self.fix = fix
+
+
+def _name(remote: str) -> str:
+    """The remote's name ("gdrive:"), only when it is a plain rclone name."""
+    name = remote.split(":", 1)[0] + ":"
+    return name if re.fullmatch(r"[\w.@ -]+:", name) else ""
+
+
+def problem(stderr: str, remote: str, doing: str) -> RemoteError:
+    """Turn rclone's stderr into something a person can act on."""
+    text = stderr or ""
+    name = _name(remote)
+    low = text.lower()
+    if name and ("empty token" in low or "config reconnect" in low or "invalid_grant" in low
+                 or "token expired" in low or "unauthorized" in low):
+        return RemoteError(f"{name} is not signed in (its login token is missing or expired)",
+                           f"rclone config reconnect {name}")
+    if "didn't find section in config file" in low or "not found in config file" in low:
+        return RemoteError(f"there is no rclone remote called {name or remote}", "rclone config")
+    lines = [re.sub(r"^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d (CRITICAL|ERROR|NOTICE) ?: ", "", l)
+             for l in text.splitlines() if " ERROR " in l or " CRITICAL " in l]
+    detail = lines[-1].strip() if lines else (text.strip().splitlines() or ["no details"])[-1]
+    return RemoteError(f"rclone could not {doing} {remote}: {detail[:240]}")
+
+
 def config() -> dict:
     path = common.config_dir() / "config"
     values = {}
@@ -61,9 +92,9 @@ def _remote(remote: str) -> str:
 def push(file: Path, remote: str = "") -> str:
     ensure_rclone()
     remote = _remote(remote)
-    r = common.run(["rclone", "copy", "--", str(file), remote], capture=False)
+    r = common.run(["rclone", "copy", "--", str(file), remote])
     if r.returncode != 0:
-        raise RuntimeError(f"rclone copy to {remote} failed")
+        raise problem(r.stderr, remote, "upload to")
     common.say(f"Uploaded {file.name} to {remote}")
     return remote
 
@@ -74,7 +105,7 @@ def listing(remote: str = "") -> list:
     remote = _remote(remote)
     r = common.run(["rclone", "lsjson", "--files-only", "--", remote])
     if r.returncode != 0:
-        raise RuntimeError(f"cannot list {remote}: {(r.stderr or '').strip()[:200]}")
+        raise problem(r.stderr, remote, "list")
     try:
         entries = json.loads(r.stdout or "[]")
     except ValueError:
@@ -95,7 +126,7 @@ def pull(dest: Path, remote: str = "", name: str = "") -> Path:
         raise RuntimeError(f"unexpected file name {name!r}")
     dest.mkdir(parents=True, exist_ok=True)
     src = remote.rstrip("/") + ("/" if not remote.endswith(":") else "") + name
-    r = common.run(["rclone", "copyto", "--", src, str(dest / name)], capture=False)
+    r = common.run(["rclone", "copyto", "--", src, str(dest / name)])
     if r.returncode != 0:
-        raise RuntimeError(f"rclone could not download {src}")
+        raise problem(r.stderr, src, "download")
     return dest / name

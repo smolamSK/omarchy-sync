@@ -38,6 +38,8 @@ Item {
   property bool busy: false
   property string step: ""
   property string error: ""
+  // A command that fixes the error (e.g. `rclone config reconnect gdrive:`), from the CLI.
+  property string errorFix: ""
   property var plan: []
   property var result: null
   property string pulled: ""
@@ -84,6 +86,7 @@ Item {
     root.action = kind
     root.step = ""
     root.error = ""
+    root.errorFix = ""
     root.result = null
     root.resultSeen = false
     root.progressDone = 0
@@ -135,6 +138,7 @@ Item {
       root.result = ev
     } else if (ev.event === "error") {
       root.error = ev.text || "failed"
+      root.errorFix = ev.fix || ""
     }
   }
 

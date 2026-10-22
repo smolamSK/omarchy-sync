@@ -120,6 +120,8 @@ Item {
     }
     if (root.destination === "" && root.destinations.length) root.destination = root.destinations[0].value
     if (root.importFile === "" && info.candidates.length) root.importFile = info.candidates[0]
+    // The default name carries the hostname, known only once info has arrived.
+    if (!root.nameEdited) root.resetFileName()
   }
 
   readonly property var destinations: {
@@ -302,6 +304,12 @@ Item {
   function defaultFileName() {
     var host = root.info ? String(root.info.host.host).replace(/[^A-Za-z0-9_-]/g, "-") : "omarchy"
     return "omarchy-settings-" + host + "-" + Qt.formatDateTime(new Date(), "yyyyMMdd-HHmm")
+  }
+
+  // Runs a fix the CLI suggested (only the rclone ones it knows) in a terminal.
+  function runFix(command) {
+    if (!/^rclone config( reconnect [\w.@ -]+:)?$/.test(command)) return
+    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", command])
   }
 
   property bool nameEdited: false
@@ -963,6 +971,13 @@ Item {
                   onClicked: Quickshell.execDetached(["wl-copy", "--", String(root.lastResult.file)])
                 }
                 Button {
+                  visible: !!root.lastResult && !!root.lastResult.fix
+                  text: root.lastResult && root.lastResult.fix ? "Fix: " + root.lastResult.fix : ""
+                  bordered: true
+                  tooltipText: "Opens a terminal for it; try again afterwards"
+                  onClicked: root.runFix(root.lastResult.fix)
+                }
+                Button {
                   visible: !!root.lastResult && root.lastResult.action === "import" && !!root.lastResult.backup
                   text: "Undo this import"
                   bordered: true
@@ -979,15 +994,26 @@ Item {
             }
           }
 
-          Text {
+          RowLayout {
             visible: !root.busy && !!root.service && root.service.error !== ""
             Layout.fillWidth: true
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            text: root.service ? "\u2717 " + root.service.error : ""
-            color: root.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
+            spacing: Style.spacing.controlGap
+            Text {
+              Layout.fillWidth: true
+              textFormat: Text.PlainText
+              wrapMode: Text.Wrap
+              text: root.service ? "\u2717 " + root.service.error : ""
+              color: root.urgent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+            }
+            Button {
+              visible: !!root.service && root.service.errorFix !== ""
+              text: root.service ? "Fix: " + root.service.errorFix : ""
+              bordered: true
+              tooltipText: "Opens a terminal for it; try again afterwards"
+              onClicked: root.runFix(root.service.errorFix)
+            }
           }
 
           ListView {

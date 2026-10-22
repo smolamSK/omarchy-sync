@@ -72,7 +72,7 @@ The command is `~/.config/omarchy/plugins/io.github.smolamsk.sync/bin/omarchy-sy
 
 ### Google Drive and other clouds
 
-The wizard uses [rclone](https://rclone.org), offering to install it when it is missing. Set up a remote once with `rclone config` (for example `gdrive`, type *drive*), then pick it in the wizard. The folder you choose (default `omarchy-sync`) is remembered in `~/.config/omarchy-sync/config`. *Import → From an rclone remote* lists the exports there, newest first. If Google Drive is already synced into a local folder, just pick that folder instead.
+The wizard uses [rclone](https://rclone.org), offering to install it when it is missing. Set up a remote once with `rclone config` (for example `gdrive`, type *drive*), then pick it in the wizard. The folder you choose (default `omarchy-sync`) is remembered in `~/.config/omarchy-sync/config`. *Import → From an rclone remote* lists the exports there, newest first. If Google Drive is already synced into a local folder, just pick that folder instead. If an upload fails because the remote is no longer signed in (its token expired, or it didn't survive a move to a new computer), the window says so and offers **Fix: rclone config reconnect gdrive:**. That opens a terminal to sign in again; then export again. The file itself is already saved locally in `~/.local/share/omarchy-sync/exports/`.
 
 ## Safety
 

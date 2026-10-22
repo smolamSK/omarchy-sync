@@ -259,7 +259,7 @@ def main(argv=None) -> int:
             return cmd_inspect(args)
     except (RuntimeError, archive.ArchiveError, OSError) as e:
         common.warn(str(e))
-        common.emit("error", text=str(e))
+        common.emit("error", text=str(e), fix=getattr(e, "fix", ""))
         return 1
     except KeyboardInterrupt:
         return 130
