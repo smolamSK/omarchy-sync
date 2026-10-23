@@ -188,6 +188,67 @@ def rewrite_home(data: bytes, src_home: str) -> bytes:
     return pattern.sub(dst.encode(), data)
 
 
+# Spellings of a CPU in tool paths, by this computer's CPU: each old spelling and what it
+# may be here, tried in order (gh_2.103.0_linux_arm64 → …_linux_amd64, node …-linux-x64).
+ARCH_SWAP = {
+    "x86_64": {"aarch64": ["x86_64"], "arm64": ["amd64", "x64"]},
+    "aarch64": {"x86_64": ["aarch64"], "amd64": ["arm64"], "x64": ["arm64"]},
+}
+# Tool folders whose paths are trusted before they exist here: the import installs them
+# at the end (`mise install`), or the user does with the same config.
+ARCH_MANAGED = (".local/share/mise/installs/", ".rustup/toolchains/")
+_ABS_PATH = re.compile(rb"(?<![\w.~-])/(?:[\w.@+~-]+/)*[\w.@+~-]+")
+
+
+def rewrite_arch(data: bytes, src_arch: str) -> tuple:
+    """Point absolute paths that name the other CPU at this one's, as rewrite_home does for
+    the home folder. Returns (data, moved, missing): a path changes only when it doesn't
+    exist here and its counterpart does (or lies under ARCH_MANAGED); one that still
+    doesn't resolve is left as it is and listed in missing, for the report."""
+    here = os.uname().machine
+    swap = ARCH_SWAP.get(here, {})
+    if not src_arch or src_arch == here or not swap or not is_text(data):
+        return data, [], []
+    token = re.compile(rb"(?<![A-Za-z0-9])(" + b"|".join(re.escape(k.encode()) for k in swap) + rb")(?![A-Za-z0-9])")
+    managed = tuple(str(home() / m) for m in ARCH_MANAGED)
+    moved, missing = [], []
+
+    def fix(match):
+        path = match.group(0)
+        if not token.search(path) or os.path.lexists(path):
+            return path
+        old = path.decode(errors="replace")
+        candidates = []
+        for i in range(max(len(v) for v in swap.values())):
+            pick = lambda t: swap[t.group(1).decode()][min(i, len(swap[t.group(1).decode()]) - 1)].encode()
+            candidate = token.sub(pick, path)
+            if candidate not in candidates:
+                candidates.append(candidate)
+        found = next((c for c in candidates if os.path.lexists(c)), None)
+        if found is None and old.startswith(managed):
+            found = candidates[0]
+        if found is None:
+            if old not in missing:
+                missing.append(old)
+            return path
+        if (old, found.decode(errors="replace")) not in moved:
+            moved.append((old, found.decode(errors="replace")))
+        return found
+
+    return _ABS_PATH.sub(fix, data), moved, missing
+
+
+def move_arch(ctx, section: str, label: str, data: bytes) -> bytes:
+    """rewrite_arch for an import, with what it did (or couldn't) in the report."""
+    src = ctx.source.get("arch", "")
+    data, moved, missing = rewrite_arch(data, src)
+    for old, new in moved:
+        ctx.report.note(section, f"{label}: {old} → {new} (this computer's CPU)")
+    for old in missing:
+        ctx.report.note(section, f"{label}: {old} looks {src}-only and doesn't exist here")
+    return data
+
+
 def walk_files(root: Path, skip_dirs=(".git",), skip=None):
     """Regular files and symlinks under root (or root itself), sorted, as Paths."""
     if root.is_symlink() or root.is_file():

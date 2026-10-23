@@ -27,6 +27,8 @@ A few seconds after the plugin is enabled you'll find **Omarchy Sync** in the ap
 | `settings` | font, default terminal / editor / browser, look toggles, toggle flags, weather location | `omarchy-font-set`, `omarchy-default-* --install`, `omarchy-hyprland-toggle`, `omarchy-toggle` |
 | `secrets` *(off unless you tick it)* | `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.local/share/keyrings`, `~/.config/rclone`, `~/.password-store`, and the key/token values from `shell.json` | encrypted with a passphrase inside the export (see Safety); restored with private permissions |
 
+Between aarch64 and x86_64, paths in copied files that point at the other CPU's build of a tool (like a git credential helper at `~/.local/share/mise/installs/gh/…/gh_…_linux_arm64/bin/gh`) are pointed at this computer's build when it exists here or mise installs it; any that can't be fixed are listed in the report.
+
 Only files that differ from what Omarchy installed (`/etc/skel`) are exported, so a fresh Omarchy on the other side keeps its own newer defaults for everything you never touched.
 
 **Never exported:** browser profiles, caches, `.git` folders, files over 25 MB, Omarchy's migration markers and the generated current theme. The things Try Omarchy (the Mac VM app) adds are also left out: its menu rows, VM-only toggles and the wallpaper link into `/usr/share`.

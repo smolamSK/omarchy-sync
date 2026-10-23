@@ -182,7 +182,8 @@ class Files:
 
     def desired(self, item) -> bytes:
         data = (self.dir / item["path"]).read_bytes()
-        return common.rewrite_home(data, self.ctx.source.get("home", ""))
+        data = common.rewrite_home(data, self.ctx.source.get("home", ""))
+        return common.move_arch(self.ctx, self.section, common.rel(common.home() / item["path"]), data)
 
     def plan(self, select=None, describe=None) -> list:
         """One action per file: new, changed or same. select(item) may return a skip reason."""

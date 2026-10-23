@@ -522,6 +522,7 @@ class OmarchySection(Section):
         entries = common.read_json(ctx.stage / self.name / "menu.json", {})
         if entries:
             moved = common.rewrite_home(json.dumps(entries, ensure_ascii=False).encode(), ctx.source.get("home", ""))
+            moved = common.move_arch(ctx, self.name, "Omarchy menu entries", moved)
             entries = json.loads(moved)
             path = H() / self.MENU
             text = path.read_text() if path.exists() else (common.SKEL / self.MENU).read_text() if (common.SKEL / self.MENU).exists() else ""
