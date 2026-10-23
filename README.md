@@ -10,6 +10,8 @@ Carry your Omarchy setup to another Omarchy computer. **Export** writes everythi
 omarchy plugin add https://github.com/smolamSK/omarchy-sync.git --enable
 ```
 
+Everything it needs comes with Omarchy: Python 3 (standard library only), gum, gpg, git, pacman/yay and pkexec. [rclone](https://rclone.org) is optional, only for uploading to a cloud remote, and the plugin offers to install it (`omarchy-pkg-add rclone`) when you first choose one. It works on Omarchy 4.0 (stable) and later, on aarch64 and x86_64.
+
 A few seconds after the plugin is enabled you'll find **Omarchy Sync** in the app launcher, and one notification. Click the notification if you also want **Setup → Sync Settings → Export… / Import… / Undo Last Import / Terminal Wizard** in the Omarchy menu. The plugin doesn't touch your menu file without that click. You can add the rows later with `omarchy-sync menu install`, or remove them with `omarchy-sync menu remove`. To bind a key to the window, use `omarchy-shell shell toggle io.github.smolamsk.sync`.
 
 ## What travels
@@ -94,6 +96,18 @@ The wizard uses [rclone](https://rclone.org), offering to install it when it is 
 - Exports from a much older Omarchy can carry Hyprland files written for an older format. The plan shows both Omarchy versions.
 - Some toggles also start or stop a service (idle, night light); the flag is set and Hyprland reloaded, but a re-login may be needed for those.
 - `/etc` settings (locale, time zone, DNS, the pacman channel) and anything outside your home folder are not carried.
+
+## Remove
+
+```sh
+# First, while the plugin is still there: its Omarchy menu rows and app launcher entry.
+~/.config/omarchy/plugins/io.github.smolamsk.sync/bin/omarchy-sync menu remove
+omarchy plugin remove io.github.smolamsk.sync
+# Its settings (apps.list, rclone remote) and the record of the last run:
+rm -rf ~/.config/omarchy-sync ~/.local/state/omarchy-sync
+```
+
+`~/.local/share/omarchy-sync` holds your exports (`exports/`, `downloads/`) and the backups from imports (`backups/`); delete it once you no longer need them. Nothing else is left behind: what an import applied is your own configuration.
 
 ## License
 
