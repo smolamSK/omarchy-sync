@@ -97,6 +97,30 @@ def undo(root: Path, report: common.Report) -> None:
             report.fail("undo", f"~/{relpath}: {e.strerror or e}")
 
 
+# Where each section may write on import. An export is a plain archive that anyone can
+# craft, so a file listed under one section can't land elsewhere (an SSH key smuggled
+# into "apps", say): only the encrypted secrets section may touch the secret folders.
+SECRET_ROOTS = (".ssh/", ".gnupg/", ".config/gh/", ".local/share/keyrings/", ".config/rclone/", ".password-store/")
+SECTION_ROOTS = {
+    "hypr": (".config/hypr/",),
+    "omarchy": (".config/omarchy/", ".config/uwsm/env.d/"),
+    "theme": (".config/omarchy/themes/",),
+    "webapps": (".local/share/applications/", ".local/share/icons/"),
+    "settings": (".local/state/omarchy/settings/",),
+    "apps": ("",),      # your apps.list: anywhere in home, except below
+    "secrets": ("",),
+}
+NEVER = (".local/share/omarchy-sync/", ".local/state/omarchy-sync/", ".config/omarchy/plugins/")
+
+
+def may_write(section: str, relpath: str) -> bool:
+    if not common.safe_relpath(relpath) or relpath.startswith(NEVER):
+        return False
+    if section != "secrets" and relpath.startswith(SECRET_ROOTS):
+        return False
+    return relpath.startswith(SECTION_ROOTS.get(section, ("\0",)))
+
+
 def skip_name(name: str) -> bool:
     """Backups, editor leftovers and samples never travel."""
     return (".pre-migration" in name or ".bak" in name or name.endswith("~")
@@ -189,6 +213,10 @@ class Files:
         """One action per file: new, changed or same. select(item) may return a skip reason."""
         actions = []
         for item in self.items:
+            if not may_write(self.section, item.get("path")):
+                actions.append(Action(self.section, "skipped",
+                                      f"{str(item.get('path'))[:120]}: not a place {self.section} may write; left alone"))
+                continue
             target = common.home() / item["path"]
             label = describe(item) if describe else common.rel(target)
             reason = select(item) if select else None

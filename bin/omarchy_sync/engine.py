@@ -194,6 +194,9 @@ class Import:
                  f"made {self.manifest.get('created', '?')}",
                  f"Importing into {h.get('host')} ({h.get('platform')}, "
                  f"{'VM' if common.is_vm(h) else 'bare metal'}, Omarchy {h.get('omarchy', '?')})"]
+        if not self.ctx.same_machine:
+            lines.append("Only apply exports you made or trust: they can install packages and plugins "
+                         "and change scripts your desktop runs.")
         if s.get("arch") and s.get("arch") != h.get("arch"):
             lines.append(f"Different CPU architecture ({s['arch']} → {h['arch']}): "
                          "packages are checked one by one against this computer's repositories.")

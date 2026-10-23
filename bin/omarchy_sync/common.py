@@ -197,7 +197,8 @@ ARCH_SWAP = {
 # Tool folders whose paths are trusted before they exist here: the import installs them
 # at the end (`mise install`), or the user does with the same config.
 ARCH_MANAGED = (".local/share/mise/installs/", ".rustup/toolchains/")
-_ABS_PATH = re.compile(rb"(?<![\w.~-])/(?:[\w.@+~-]+/)*[\w.@+~-]+")
+# A "/" after "/" is the host part of a URL (https://host/x86_64/…), not a path.
+_ABS_PATH = re.compile(rb"(?<![\w.~/-])/(?:[\w.@+~-]+/)*[\w.@+~-]+")
 
 
 def rewrite_arch(data: bytes, src_arch: str) -> tuple:
@@ -322,6 +323,14 @@ class Report:
 
 # Folders that never travel: version control, caches, logs.
 SKIP_DIRS = (".git", "node_modules", "__pycache__", "cache", "Cache", "CachedData", "logs", ".cache")
+
+
+def safe_relpath(relpath) -> bool:
+    """A path from an export file, which anyone could have made: relative, no "..", no NUL,
+    so joined to the home folder it stays inside it."""
+    if not isinstance(relpath, str) or not relpath or "\0" in relpath or relpath.startswith(("/", "~")):
+        return False
+    return all(part not in ("", ".", "..") for part in relpath.split("/"))
 
 
 def is_inside(path: Path, root: Path) -> bool:

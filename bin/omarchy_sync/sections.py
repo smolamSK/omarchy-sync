@@ -218,6 +218,9 @@ class PluginsSection(Section):
         have = installed_plugins()
         actions = []
         for p in data.get("plugins", []):
+            if not _plain_plugin(p):
+                actions.append(Action(self.name, "skipped", f"{str(p.get('id'))[:80]}: not a valid plugin entry; left alone"))
+                continue
             ctx.expected_plugins.add(p["id"])
             if p["id"] in have:
                 note = ""
@@ -267,6 +270,20 @@ class PluginsSection(Section):
             shutil.rmtree(dest, ignore_errors=True)
             raise RuntimeError(f"{dest.name} does not validate on this Omarchy: {(r.stdout or r.stderr).strip()[:200]}")
         common.run(["omarchy-shell", "shell", "rescanPlugins"])
+
+
+PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _plain_plugin(p) -> bool:
+    """A plugin entry from the export, checked as omarchy plugin checks ids; its folder and
+    any locally changed files must be plain relative names too."""
+    if not isinstance(p, dict):
+        return False
+    pid, folder = p.get("id"), p.get("folder", p.get("id"))
+    ok = all(isinstance(x, str) and PLUGIN_ID.match(x) and ".." not in x and not x.startswith("omarchy.")
+             for x in (pid, folder))
+    return ok and all(common.safe_relpath(r) for r in p.get("overlay", []) or [])
 
 
 def installed_plugins() -> dict:
@@ -325,10 +342,14 @@ class ThemeSection(Section):
         current_here = H() / ".local/state/omarchy/current/theme.name"
         here = current_here.read_text().strip() if current_here.exists() else ""
         want = data.get("current", "")
+        if not isinstance(want, str) or not re.fullmatch(r"[a-z0-9_][a-z0-9._+-]*", want):
+            want = ""
         if want and want != here:
             actions.append(Action(self.name, "changed", f"switch theme {here or '?'} → {want}",
                                   lambda: self._switch(want), late=True))
         bg = data.get("background", "")
+        if not isinstance(bg, str) or "/" in bg or bg.startswith("."):
+            bg = ""  # a bare file name in the theme's backgrounds, nothing else
         if bg:
             actions.append(Action(self.name, "changed" if want != here or self._bg_now() != bg else "same",
                                   f"background {bg}", lambda: self._background(ctx, want, bg), late=True))
@@ -659,6 +680,7 @@ class WebappsSection(Section):
 
 # --------------------------------------------------------------------------- settings
 
+FLAG_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 HARDWARE_FLAG = re.compile(r"gpu|touchpad|touchscreen|input|hibernat|suspend|battery|crash|lid")
 
 
@@ -750,7 +772,9 @@ class SettingsSection(Section):
                                   lambda name=name, state=state: self._run(["omarchy-hyprland-toggle", name, state])))
         flags_dir = H() / ".local/state/omarchy/toggles"
         flags_here = {p.name for p in flags_dir.iterdir() if p.is_file()} if flags_dir.is_dir() else set()
-        flags_want = set(data.get("flags", []))
+        # Names straight from the export: omarchy-toggle joins them into a path it creates
+        # or deletes, so only plain flag names count.
+        flags_want = {f for f in data.get("flags", []) if isinstance(f, str) and FLAG_NAME.match(f)}
         for name in sorted((flags_here | flags_want)):
             if HARDWARE_FLAG.search(name):
                 continue
