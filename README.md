@@ -41,7 +41,7 @@ The launcher and the menu rows open the **Omarchy Sync window**, a native Omarch
 
 While it runs, a progress bar shows the step it's on (section by section on export, change by change on import). When it's done, a card says how it went: for an export the file name, folder, size and upload, with **Open folder** and **Copy path**; for an import how many changes were applied, skipped or failed, with **Undo this import**. *Show details* opens the full log. If the window is closed by then, a notification tells you instead. An import ends by restarting the Omarchy shell to load the new settings, and the notification arrives once the shell is back.
 
-The bottom of the window shows the progress and log. Escape closes the window but not a running export or import: it carries on, and reopening shows where it is. When package installs need your password, Omarchy's own password prompt (polkit) asks for it, since there is no terminal.
+The bottom of the window shows the progress and log. Escape closes the window but not a running export or import: it carries on, and reopening shows where it is. A run also carries on when the Omarchy shell reloads its plugins (an import that adds plugins makes it do that) or restarts. When package installs need your password, Omarchy's own password prompt (polkit) asks for it, since there is no terminal.
 
 **Terminal Wizard** (or `omarchy-sync` in a terminal) offers the same steps as gum prompts:
 

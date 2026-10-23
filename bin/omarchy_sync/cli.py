@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import archive, common, engine, menu, packages, remote, sections, wizard
+from . import archive, common, engine, job, menu, packages, remote, sections, wizard
 
 HELP = """\
 Omarchy Sync carries your Omarchy setup to another Omarchy computer, aarch64 or x86_64.
@@ -27,6 +27,8 @@ the file. Any name works: renamed exports are still recognised by their contents
 For the GUI (and scripts): `info --json`, `inspect FILE --json`, `import FILE --plan-json`,
 `--passphrase-stdin`, `export --packages a,b`, and `--events` before the command for
 JSON-lines progress on stdout.
+`job start KIND -- ARGS` runs one in the background with its events in job.log
+(what the window uses, so a run survives shell reloads); `job status --json`.
 
 Sections: """ + ", ".join(sections.EXPORT_ORDER) + """ (secrets only with --secrets).
 """
@@ -168,6 +170,8 @@ def main(argv=None) -> int:
     if argv[0] in ("-V", "--version", "version"):
         print(engine.VERSION)
         return 0
+    if argv[0] == "job":
+        return job.main(argv[1:])
 
     p = argparse.ArgumentParser(prog="omarchy-sync", add_help=True)
     sub = p.add_subparsers(dest="cmd", required=True)

@@ -3,12 +3,15 @@ import Quickshell
 import Quickshell.Io
 
 // Owns every run of bin/omarchy-sync for the GUI (SyncWindow.qml). The window is
-// unloaded when it is hidden, so a run that lived there would die with it; here an
-// export or import keeps going when the window closes, and reopening shows it again.
+// unloaded when it is hidden, and the shell destroys this service too whenever it
+// reloads plugins (an import that adds one triggers that) or restarts. So a run is not
+// our child: `omarchy-sync job start` launches it in its own session and it writes
+// job.log, which we follow. A new instance of this service finds a run still going
+// (`job status --json`) and replays its log, so reopening the window shows it again.
 //
 // The CLI runs with --events: lines that are JSON objects with an "event" key drive
-// the state below (step / running / plan / done / error); every other line is log.
-// A passphrase is written to the process's stdin (--passphrase-stdin), never argv.
+// the state below (step / running / plan / done / error / log / exit); every other
+// line is log. A passphrase is written to stdin (--passphrase-stdin), never argv.
 //
 // At login it also runs `service-start` once: it keeps the app launcher entry current
 // and, the first time only, offers (by notification) to add the Omarchy menu rows.
@@ -55,6 +58,8 @@ Item {
 
   property string pendingSecret: ""
   property string lastLine: ""
+  // The run's exit code from its `exit` event; -1 until it arrives.
+  property int exitCode: -1
 
   signal finished(string action, int code)
 
@@ -80,9 +85,18 @@ Item {
     if (root.action === "plan" && !root.busy) root.plan = []
   }
 
-  // run(kind, args, secret): start `omarchy-sync --events ARGS`; false when busy.
+  // run(kind, args, secret): start `omarchy-sync --events ARGS` as a job; false when busy.
   function run(kind, args, secret) {
     if (root.busy) return false
+    root.reset(kind)
+    root.pendingSecret = secret || ""
+    runner.command = [root.script, "job", "start", kind, "--"].concat(args)
+    root.busy = true
+    runner.running = true
+    return true
+  }
+
+  function reset(kind) {
     root.action = kind
     root.step = ""
     root.error = ""
@@ -95,12 +109,14 @@ Item {
     root.lastLine = ""
     if (kind === "plan" || kind === "import") root.plan = kind === "plan" ? [] : root.plan
     if (kind === "pull") root.pulled = ""
+    root.exitCode = -1
     logModel.clear()
-    root.pendingSecret = secret || ""
-    runner.command = [root.script, "--events"].concat(args)
-    root.busy = true
-    runner.running = true
-    return true
+  }
+
+  // Follow a job's log from the top until its supervisor has exited.
+  function follow(job) {
+    follower.command = ["tail", "-c", "+1", "-s", "0.3", "-F", "--pid=" + job.pid, job.log]
+    follower.running = true
   }
 
   function addLog(text, kind) {
@@ -139,9 +155,14 @@ Item {
     } else if (ev.event === "error") {
       root.error = ev.text || "failed"
       root.errorFix = ev.fix || ""
+    } else if (ev.event === "log") {
+      root.readLine(ev.text || "", ev.stream === "err")
+    } else if (ev.event === "exit") {
+      root.exitCode = ev.code
     }
   }
 
+  // `job start`: hands the run to its own session and answers with one `job` event.
   Process {
     id: runner
     environment: ({ OMARCHY_SYNC_GUI: "1" })
@@ -153,12 +174,49 @@ Item {
       root.pendingSecret = ""
       stdinEnabled = false
     }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var ev = null
+        try { ev = JSON.parse(text.trim().split("\n").pop()) } catch (e) { ev = null }
+        runner.stdinEnabled = true
+        if (ev && ev.event === "job") {
+          root.follow(ev)
+        } else {
+          root.error = ev && ev.text ? ev.text : "omarchy-sync didn't start"
+          root.busy = false
+        }
+      }
+    }
+  }
+
+  // The run's log; tail ends by itself once the run's supervisor has exited.
+  Process {
+    id: follower
     stdout: SplitParser { onRead: function(line) { root.readLine(line, false) } }
-    stderr: SplitParser { onRead: function(line) { root.readLine(line, true) } }
-    // Output may still be in flight when the process exits; settle a moment later.
+    // Output may still be in flight when tail exits; settle a moment later.
     onExited: function(code) {
-      settle.code = code
+      settle.code = root.exitCode >= 0 ? root.exitCode : 1
       settle.restart()
+    }
+  }
+
+  // A run that a previous instance of this service started (before a plugin reload or
+  // a shell restart) is still ours to show.
+  Process {
+    id: resume
+    command: [root.script, "job", "status", "--json"]
+    running: true
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var job = null
+        try { job = JSON.parse(text) } catch (e) { job = null }
+        if (!job || !job.running || root.busy) return
+        root.reset(job.kind)
+        root.busy = true
+        root.follow(job)
+      }
     }
   }
 
@@ -172,7 +230,6 @@ Item {
       if (root.action === "pull" && code === 0 && /\.tar\.gz$/.test(root.lastLine)) root.pulled = root.lastLine
       root.busy = false
       root.step = ""
-      runner.stdinEnabled = true
       // Closed window: say it's done. After an import or undo from here the shell restarts,
       // and the detached restart announces the result itself once the new shell is up.
       var announced = root.action === "export" || root.action === "import" || root.action === "undo"

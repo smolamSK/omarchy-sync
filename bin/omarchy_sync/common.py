@@ -39,10 +39,9 @@ def gui() -> bool:
 
 
 def restart_shell() -> None:
-    """omarchy-restart-shell, but never from inside the shell's own child: the GUI runs
-    us from Service.qml, and the restart kills that shell and with it this process. So
-    from the GUI it starts in its own session a few seconds later, after the run has
-    finished and said so."""
+    """omarchy-restart-shell, but from the GUI a few seconds later in its own session,
+    after the run has finished and said so: the window that follows the run (job.py)
+    goes away with the old shell, so the result is announced once the new one is up."""
     if not gui():
         run(["omarchy-restart-shell"])
         return
