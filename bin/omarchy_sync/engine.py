@@ -211,7 +211,7 @@ class Import:
             actions += [
                 sections.Action("reload", "new", "reload Hyprland",
                                 lambda: common.run(["hyprctl", "reload"]), late=True),
-                sections.Action("reload", "new", "restart the Omarchy shell" + (" (a few seconds after)" if common.gui() else ""),
+                sections.Action("reload", "new", "restart the Omarchy shell" + (" (once you've seen the result)" if common.gui() else ""),
                                 common.restart_shell, late=True),
             ]
         return actions

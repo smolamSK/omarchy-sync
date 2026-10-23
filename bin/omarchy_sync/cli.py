@@ -218,6 +218,8 @@ def main(argv=None) -> int:
     sub.add_parser("sections")
     sub.add_parser("service-start")
     sub.add_parser("notify-last")
+    rs = sub.add_parser("restart-shell")
+    rs.add_argument("--notify", action="store_true", help="announce the last run once the shell is back")
     inf = sub.add_parser("info")
     inf.add_argument("--json", action="store_true", required=True)
     ins = sub.add_parser("inspect")
@@ -256,6 +258,9 @@ def main(argv=None) -> int:
             return 0
         if args.cmd == "notify-last":
             engine.notify_last()
+            return 0
+        if args.cmd == "restart-shell":
+            common.restart_shell_later(args.notify)
             return 0
         if args.cmd == "info":
             return cmd_info()

@@ -39,16 +39,19 @@ def gui() -> bool:
 
 
 def restart_shell() -> None:
-    """omarchy-restart-shell, but from the GUI a few seconds later in its own session,
-    after the run has finished and said so: the window that follows the run (job.py)
-    goes away with the old shell, so the result is announced once the new one is up."""
+    """omarchy-restart-shell. From the GUI the window does it (`restart-shell`) once the
+    result has been seen, because the restart takes the window with it."""
     if not gui():
         run(["omarchy-restart-shell"])
-        return
-    # The shell owns the notification daemon too, so the result is announced by
-    # `notify-last` once the new shell is up.
+
+
+def restart_shell_later(notify: bool) -> None:
+    """omarchy-restart-shell in its own session a moment later, so the shell's own
+    service that asked for it isn't waiting on it. With notify, the result is announced
+    by `notify-last` once the new shell, which owns the notification daemon, is up."""
     script = shlex.quote(str(Path(__file__).resolve().parent.parent / "omarchy-sync"))
-    subprocess.Popen(["sh", "-c", f"sleep 4; omarchy-restart-shell; exec {script} notify-last"],
+    after = f"; exec {script} notify-last" if notify else ""
+    subprocess.Popen(["sh", "-c", f"sleep 1; omarchy-restart-shell{after}"],
                      start_new_session=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

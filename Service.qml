@@ -60,6 +60,13 @@ Item {
   property string lastLine: ""
   // The run's exit code from its `exit` event; -1 until it arrives.
   property int exitCode: -1
+  // An import or undo finished while the window was open: the shell restart it needs
+  // waits until the window closes (or Restart now), so the result can be read first.
+  property bool restartPending: false
+  readonly property string pluginId: (manifest && manifest.id) || "io.github.smolamsk.sync"
+
+  // The job remembers this, so a plugin reload that closes the window mid-run can reopen it.
+  onWindowOpenChanged: if (root.busy) root.noteWindow()
 
   signal finished(string action, int code)
 
@@ -98,6 +105,7 @@ Item {
 
   function reset(kind) {
     root.action = kind
+    root.restartPending = false
     root.step = ""
     root.error = ""
     root.errorFix = ""
@@ -111,6 +119,17 @@ Item {
     if (kind === "pull") root.pulled = ""
     root.exitCode = -1
     logModel.clear()
+  }
+
+  function noteWindow() {
+    Quickshell.execDetached([root.script, "job", "window", root.windowOpen ? "open" : "closed"])
+  }
+
+  // Restart the shell to load what an import brought (plugins, bar, widgets); with
+  // notify, the result is announced once the new shell is up.
+  function restartShell(notify) {
+    root.restartPending = false
+    Quickshell.execDetached([root.script, "restart-shell"].concat(notify ? ["--notify"] : []))
   }
 
   // Follow a job's log from the top until its supervisor has exited.
@@ -182,6 +201,7 @@ Item {
         runner.stdinEnabled = true
         if (ev && ev.event === "job") {
           root.follow(ev)
+          root.noteWindow()
         } else {
           root.error = ev && ev.text ? ev.text : "omarchy-sync didn't start"
           root.busy = false
@@ -202,11 +222,11 @@ Item {
   }
 
   // A run that a previous instance of this service started (before a plugin reload or
-  // a shell restart) is still ours to show.
+  // a shell restart) is still ours to show. If the reload closed the window just now,
+  // open it again. Asked a moment after load, so the closed window has been noted.
   Process {
     id: resume
     command: [root.script, "job", "status", "--json"]
-    running: true
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -216,8 +236,17 @@ Item {
         root.reset(job.kind)
         root.busy = true
         root.follow(job)
+        if (job.window === "closed" && job.windowAgo !== undefined && job.windowAgo < 5)
+          Quickshell.execDetached(["omarchy-shell", "shell", "summon", root.pluginId,
+                                   JSON.stringify({ tab: job.kind === "export" || job.kind === "undo" ? job.kind : "import" })])
       }
     }
+  }
+
+  Timer {
+    interval: 1000
+    running: true
+    onTriggered: resume.running = true
   }
 
   Timer {
@@ -230,11 +259,16 @@ Item {
       if (root.action === "pull" && code === 0 && /\.tar\.gz$/.test(root.lastLine)) root.pulled = root.lastLine
       root.busy = false
       root.step = ""
-      // Closed window: say it's done. After an import or undo from here the shell restarts,
-      // and the detached restart announces the result itself once the new shell is up.
+      // An import or undo needs a shell restart: with the window open it waits until the
+      // window closes, so the card can be read; closed, it restarts now and the new shell
+      // announces the result. Otherwise a closed window gets a notification.
       var announced = root.action === "export" || root.action === "import" || root.action === "undo"
-      if (announced && !root.windowOpen && root.result && !root.result.restarting)
+      if (announced && root.result && root.result.restarting) {
+        if (root.windowOpen) root.restartPending = true
+        else root.restartShell(true)
+      } else if (announced && !root.windowOpen && root.result) {
         Quickshell.execDetached([root.script, "notify-last"])
+      }
       root.finished(root.action, code)
       root.refreshInfo()
     }

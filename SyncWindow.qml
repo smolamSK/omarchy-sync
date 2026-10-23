@@ -65,11 +65,13 @@ Item {
   function close() {
     root.opened = false
     if (root.service) root.service.windowOpen = false
+    if (root.service && root.service.restartPending) root.service.restartShell(false)
   }
 
   function dismiss() {
     root.opened = false
     if (root.service) root.service.windowOpen = false
+    if (root.service && root.service.restartPending) root.service.restartShell(false)
     if (root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
   }
 
@@ -302,7 +304,8 @@ Item {
     } else if (r.action === "import") {
       lines.push((c.ok || 0) + " changes applied, " + (c.skipped || 0) + " skipped" + (c.failed ? ", " + c.failed + " failed" : ""))
       if (r.backup) lines.push("Replaced files are backed up; Undo puts them back.")
-      if (r.restarting && !root.cardIsEarlier) lines.push("The Omarchy shell restarts in a few seconds to load everything.")
+      if (r.restarting && !root.cardIsEarlier && root.service && root.service.restartPending)
+        lines.push("The Omarchy shell restarts when you close this window, to load the new plugins and bar settings.")
     } else {
       lines.push((c.ok || 0) + " files put back")
     }
@@ -990,6 +993,12 @@ Item {
                   bordered: true
                   tooltipText: "Opens a terminal for it; try again afterwards"
                   onClicked: root.runFix(root.lastResult.fix)
+                }
+                Button {
+                  visible: !!root.lastResult && !root.cardIsEarlier && !!root.service && root.service.restartPending
+                  text: "Restart shell now"
+                  bordered: true
+                  onClicked: root.service.restartShell(false)
                 }
                 Button {
                   visible: !!root.lastResult && root.lastResult.action === "import" && !!root.lastResult.backup

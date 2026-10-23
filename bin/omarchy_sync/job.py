@@ -46,7 +46,21 @@ def status() -> dict:
     if not isinstance(job, dict) or not job.get("pid"):
         return {"running": False}
     job["running"] = "ended" not in job and _alive(int(job["pid"]))
+    if "windowAt" in job:
+        job["windowAgo"] = round(time.time() - job.pop("windowAt"), 1)
     return job
+
+
+def window(state: str) -> int:
+    """Note the window opening or closing during a run. A plugin reload closes it and
+    destroys the service in one go; the new service reopens it when it was closed only
+    a moment before (`windowAgo`), not when you closed it yourself."""
+    record, _ = _paths()
+    job = common.read_json(record)
+    if isinstance(job, dict) and "ended" not in job:
+        job.update(window=state, windowAt=time.time())
+        common.write_json(record, job)
+    return 0
 
 
 def start(kind: str, args: list) -> int:
@@ -109,6 +123,8 @@ def main(argv: list) -> int:
         return 0
     if action == "run":
         return run(rest)
+    if action == "window" and rest[:1] in (["open"], ["closed"]):
+        return window(rest[0])
     if action == "start" and rest:
         kind, rest = rest[0], rest[1:]
         if rest[:1] == ["--"]:
