@@ -342,10 +342,15 @@ Item {
 
   // ------------------------------------------------------------------ window
 
-  OverlayWindow {
+  PanelWindow {
     id: panel
-    shown: root.opened
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
     WlrLayershell.namespace: "omarchy-sync"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    exclusionMode: ExclusionMode.Ignore
 
     Rectangle { anchors.fill: parent; color: Commons.Color.menu.scrim }
     MouseArea { anchors.fill: parent; onClicked: root.dismiss() }

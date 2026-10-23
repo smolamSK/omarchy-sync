@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 An Omarchy shell plugin (`io.github.smolamsk.sync`) that exports a user's Omarchy settings to one `omarchy-settings-<host>-<date>.tar.gz` file and imports it on another Omarchy computer, including aarch64 ↔ x86_64. It replaced the one-off `restore.sh` written for the 2026-10-22 VM migration.
 
 - `bin/omarchy-sync` (Bash) only starts `bin/omarchy_sync` (Python standard library) with `python3 -I -B`; the wrapper inserts its own folder into `sys.path`. All logic lives there; both UIs drive it.
-- GUI: `SyncWindow.qml` (kind `overlay`, an `OverlayWindow` so text fields get keyboard focus) is a view only. `Service.qml` owns every CLI run (`run(kind, args, secret)`), because the host unloads a hidden overlay and would kill a run that lived there. The window gets the service through the injected `service` property. The service also runs `service-start` once, 8 s after load.
+- GUI: `SyncWindow.qml` (kind `overlay`, a fullscreen `PanelWindow` on the overlay layer with exclusive keyboard focus so text fields get typing; released Omarchy shells have no `OverlayWindow`) is a view only. `Service.qml` owns every CLI run (`run(kind, args, secret)`), because the host unloads a hidden overlay and would kill a run that lived there. The window gets the service through the injected `service` property. The service also runs `service-start` once, 8 s after load.
 - Terminal: `wizard.py` (gum), started by `omarchy-sync` with no arguments or the *Terminal Wizard* menu row.
 
 ## Layout
