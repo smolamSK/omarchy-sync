@@ -4,7 +4,7 @@
   "name": "Omarchy Sync",
   "version": "1.0.0",
   "author": "smolamSK",
-  "description": "Export your Omarchy settings to one file (USB key, Google Drive via rclone) and apply them on another Omarchy computer, aarch64 or x86_64",
+  "description": "Jumping between Omarchy installs? Export your setup to one file and pick up where you left off on the next one: plugins, themes, bar, bindings, packages, web apps, aarch64 or x86_64",
   "homepage": "https://github.com/smolamSK/omarchy-sync",
   "license": "GPL-2.0-or-later",
   "kinds": [

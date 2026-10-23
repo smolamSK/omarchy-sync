@@ -1,6 +1,8 @@
 # Omarchy Sync
 
-Carry your Omarchy setup to another Omarchy computer. **Export** writes everything you changed into one file; put it on a USB key, in Downloads or (with rclone) on Google Drive. **Import** on the other computer shows what would change, backs up every file it replaces, and applies the rest. It works between aarch64 and x86_64: packages are checked one by one against the new computer's repositories, and anything that isn't available for that CPU is listed, not forced.
+Jumping from one Omarchy installation to another? A fresh reinstall, a new laptop, a VM next to your desktop, an Apple Silicon Mac one day and an x86 PC the next: each time you start from a clean Omarchy and spend an evening putting your bar, bindings, plugins, themes, fonts, web apps and the packages you added back the way they were. Omarchy Sync lets you pick up where you left off instead. Export on the computer you're leaving, import on the one you're moving to, and carry on.
+
+**Export** writes everything you changed into one file; put it on a USB key, in Downloads or (with rclone) on Google Drive. **Import** on the other computer shows what would change, backs up every file it replaces, and applies the rest. It works between aarch64 and x86_64: packages are checked one by one against the new computer's repositories, and anything that isn't available for that CPU is listed, not forced.
 
 ![The Omarchy Sync window on the Export tab, after an export uploaded to Google Drive](preview.png)
 
